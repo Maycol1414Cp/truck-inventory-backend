@@ -1,0 +1,10 @@
+# Secretos y variables de entorno
+.env
+secret.json
+
+# Dependencias (No se suben, se instalan en el server)
+node_modules/
+
+# Logs y basura del sistema
+npm-debug.log*
+.DS_Store
