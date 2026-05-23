@@ -83,7 +83,7 @@ export const editProduct = async (req, res) => {
                 stock = $5, 
                 price = $6, 
                 category_id = $7,
-                updated_at = CURRENT_TIMESTAMP
+                created_at = CURRENT_TIMESTAMP
             WHERE id = $8
             RETURNING *;
         `
