@@ -9,6 +9,7 @@ import pool from "./config/database.js";
 
 //importamos product routes
 import productRoutes from "./routes/product.routes.js";
+import itemRoutes from "./routes/itemRoutes.js";
 
 //import productRoutes from "./routes/productRoutes.js";
 
@@ -22,6 +23,7 @@ app.use(express.json());
 app.use(cors());
 //montaje de rutas
 app.use('/api/products', productRoutes);
+app.use('/api/items', itemRoutes);
 
 
 //health-check
