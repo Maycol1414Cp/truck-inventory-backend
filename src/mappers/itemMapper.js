@@ -10,7 +10,8 @@ export const itemMapper = {
             itemDescription: dbRow.item_description,
             photo: dbRow.photo,
             // calculamos el stock
-            stock: parseInt(dbRow.stock_total) || parseInt(dbRow.stock)||0
+            stock: parseInt(dbRow.stock_total) || parseInt(dbRow.stock)||0,
+            tipo: dbRow.tipo_subtipo || 'general' // Si el query no detectó un subtipo, lo dejamos como 'general'
         }
         if (dbRow.tipo_subtipo==='seal'){
             baseItem.especificaciones = {
@@ -19,8 +20,15 @@ export const itemMapper = {
                 outerDiameter: parseFloat(dbRow.seal_outer),
                 material: dbRow.seal_material
             };
+        }else if (dbRow.tipo_subtipo==='bearing'){
+            baseItem.especificaciones = {
+                code: dbRow.bearing_code,
+                height: parseFloat(dbRow.bearing_height),
+                innerDiameter: parseFloat(dbRow.bearing_inner),
+                outerDiameter: parseFloat(dbRow.bearing_outer),
+                typeBearing: dbRow.bearing_type
+            };
         }
-
         return baseItem;
     },
 // GET todos los items con sus datos extras reales (Corregido el SELECT y el GROUP BY)
@@ -44,7 +52,7 @@ export const itemMapper = {
                 -- Detector de subtipo al vuelo
                 CASE 
                     WHEN s.oem_number IS NOT NULL THEN 'seal'
-                    WHEN b.oem_number IS NOT NULL THEN 'bearing'
+                    WHEN b.oem_number IS NOT NULL THEN 'bearing'   
                     WHEN v.oem_number IS NOT NULL THEN 'valve'
                     WHEN sn.oem_number IS NOT NULL THEN 'sensor'
                     WHEN rk.oem_number IS NOT NULL THEN 'repairkit'
@@ -140,10 +148,11 @@ export const itemMapper = {
         return this.toDomain(rows[0]);
     },
     //editar
-    async updateItem(oemNumber, itemData, sealData = null) {
+    async updateItem(oemNumber, itemData, extraData = null, tipo = null) {
         // 1. Solicitamos un cliente exclusivo para controlar la transacción
         const client = await pool.connect();
         try {
+            console.log(`Iniciando actualización para OEM ${oemNumber} tipo: ${tipo}`);
             await client.query('BEGIN'); // 🚀 Iniciamos la transacción
 
             // 2. Actualizamos la tabla maestra 'item'
@@ -166,24 +175,38 @@ export const itemMapper = {
                 await client.query('ROLLBACK');
                 return null;
             }
-
             // 3. Si se enviaron datos de 'seal', actualizamos la tabla especializada
-            if (sealData) {
+            if (tipo === 'seal' && extraData) {
                 const sealQuery = `
                     UPDATE seal 
                     SET height = $1, inner_diameter = $2, outer_diameter = $3, material = $4
                     WHERE oem_number = $5;
                 `;
                 const valuesSeal = [
-                    sealData.height,
-                    sealData.innerDiameter,
-                    sealData.outerDiameter,
-                    sealData.material,
+                    extraData.height,
+                    extraData.innerDiameter,
+                    extraData.outerDiameter,
+                    extraData.material,
                     oemNumber
                 ];
                 await client.query(sealQuery, valuesSeal);
             }
-
+            if (tipo === 'bearing' && extraData) {
+                const bearingQuery = `
+                    UPDATE bearing 
+                    SET code = $1, height = $2, inner_diameter = $3, outer_diameter = $4, type_bearing = $5
+                    WHERE oem_number = $6;
+                `;
+                const valuesBearing = [
+                    extraData.code,
+                    extraData.height,
+                    extraData.innerDiameter,
+                    extraData.outerDiameter,
+                    extraData.typeBearing,
+                    oemNumber
+                ];
+                await client.query(bearingQuery, valuesBearing);
+            }
             await client.query('COMMIT'); // Todo salió bien, guardamos los cambios en GCP
 
             // 4. Retornamos el ítem completamente actualizado usando tu método de lectura inteligente

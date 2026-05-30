@@ -1,5 +1,8 @@
 import {itemMapper} from '../mappers/itemMapper.js';
 import { sealMapper } from '../mappers/sealMapper.js'; 
+import { bearingMapper } from '../mappers/bearingMapper.js';
+
+// Controladores para items y subtipos (seals y bearings)
 //items
 export const getAllItems = async (req, res) => {
     try{
@@ -29,7 +32,7 @@ export const createItem = async (req, res) => {
         // 1. Extraemos de forma limpia las variables usando destructuring de JS
         const { tipo, especificaciones, ...itemData } = req.body;
 
-        // 2. CASO A: Si el usuario especifica que es un retén (seal)
+        // 2. CASO A: Si el usuario especifica que es un retén (seal, bearing, etc), entonces esperamos que venga un objeto 'especificaciones' con los datos técnicos, y llamamos a la función especializada de ese subtipo
         if (tipo === 'seal') {
             if (!especificaciones) {
                 return res.status(400).json({ 
@@ -37,7 +40,6 @@ export const createItem = async (req, res) => {
                     error: 'Faltan las especificaciones técnicas del retén.' 
                 });
             }
-            
             // Llamamos a la transacción que creamos en el sealMapper
             const newSeal = await sealMapper.createSeal(itemData, especificaciones);
             
@@ -46,7 +48,23 @@ export const createItem = async (req, res) => {
                 message: "Retén (Seal) creado correctamente con sus especificaciones", 
                 data: newSeal
             });
+        }else if (tipo === 'bearing') {
+            if (!especificaciones) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Faltan las especificaciones técnicas del rodamiento.' 
+                });
+            }
+            // Llamamos a la transacción que creamos en el bearingMapper
+            const newBearing = await bearingMapper.createBearing(itemData, especificaciones);
+
+            return res.status(201).json({
+                success: true, 
+                message: "Rodamiento (Bearing) creado correctamente con sus especificaciones", 
+                data: newBearing
+            });
         }
+
         // 3. CASO B: Si es un ítem común y corriente (General sin subtipo)
         const newItem = await itemMapper.createItem(itemData);
         
@@ -81,10 +99,13 @@ export const updateItem = async (req, res) => {
 
         // Si desde el frontend nos dicen que el objeto editado es un seal (retén)
         if (tipo === 'seal') {
-            updatedItem = await itemMapper.updateItem(oemNumber, itemData, especificaciones);
+            updatedItem = await itemMapper.updateItem(oemNumber, itemData, especificaciones, tipo);
+        }else if (tipo === 'bearing') {
+            // Si desde el frontend nos dicen que el objeto editado es un bearing (rodamiento)
+            updatedItem = await itemMapper.updateItem(oemNumber, itemData, especificaciones, tipo);
         } else {
             // Si es un ítem general, el tercer parámetro se queda como null
-            updatedItem = await itemMapper.updateItem(oemNumber, itemData);
+            updatedItem = await itemMapper.updateItem(oemNumber, itemData, null, null);
         }
 
         if (!updatedItem) {
@@ -98,7 +119,7 @@ export const updateItem = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('🔴 Error al actualizar ítem:', error.message);
+        console.error('Error al actualizar ítem:', error.message);
         res.status(500).json({ success: false, error: "Error interno al actualizar." });
     }
 };
@@ -129,4 +150,18 @@ export const getSealByOem = async (req, res) =>{
         res.status(500).json({error: "Error al obtener seal"});
     }
 };
+
+//GET bering
+export const getBearingByOem = async (req, res) =>{
+    try{
+        const bearing = await bearingMapper.getBearingByOem(req.params.oemNumber);
+        if(!bearing){
+            return res.status(404).json({error: "Bearing no encontrado"});
+        }
+        res.status(200).json({success: true, message: "Bearing obtenido correctamente", data: bearing});
+    }catch(error){
+        console.log('Error al obtener bearing:\n', error.message);
+        res.status(500).json({error: "Error al obtener bearing"});
+    }
+}; 
 
