@@ -262,6 +262,7 @@ ALTER SEQUENCE item_id_item_seq RESTART WITH 101;
 
 CREATE TABLE IF NOT EXISTS brand (
     id_brand SERIAL PRIMARY KEY,
+    country VARCHAR(15),
     brand_name VARCHAR(50) NOT NULL UNIQUE,
     logo_url VARCHAR(512)
 );
