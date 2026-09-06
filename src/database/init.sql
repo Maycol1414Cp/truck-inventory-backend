@@ -105,18 +105,17 @@ CREATE TABLE IF NOT EXISTS repairkit(
     CONSTRAINT fk_valve_compatibility FOREIGN KEY (valve_compatibility) REFERENCES valve(id_item) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS repuesto(
-    id_item integer NOT NULL,
+CREATE TABLE IF NOT EXISTS repuesto (
+    id_item INTEGER NOT NULL,
     number_brand VARCHAR(20) NOT NULL,
-    brand VARCHAR(10),
-    price DECIMAL (10,2) NOT NULL DEFAULT 0.00,
-    cost DECIMAL (10,2) NOT NULL DEFAULT 0.00,
+    id_brand INTEGER NOT NULL, 
+    price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    cost DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     stock INTEGER NOT NULL DEFAULT 0,
     
-    -- ✅ AGREGADO: Clave primaria compuesta para asegurar la integridad de la tabla
     CONSTRAINT pk_repuesto PRIMARY KEY (id_item, number_brand),
-    -- ✅ AGREGADO: Clave foránea que conecta este repuesto comercial con su definición técnica en 'item'
-    CONSTRAINT fk_repuesto_item FOREIGN KEY (id_item) REFERENCES item(id_item)
+    CONSTRAINT fk_repuesto_item FOREIGN KEY (id_item) REFERENCES item(id_item) ON DELETE CASCADE,
+    CONSTRAINT fk_repuesto_brand FOREIGN KEY (id_brand) REFERENCES brand(id_brand) ON DELETE RESTRICT
 );
 CREATE TABLE item_oem (
     id_item_oem SERIAL PRIMARY KEY,
@@ -260,3 +259,9 @@ CREATE TABLE item_oem (
 -- Índice para acelerar búsquedas por código OEM
 CREATE INDEX idx_item_oem_code ON item_oem(oem_code);
 ALTER SEQUENCE item_id_item_seq RESTART WITH 101;
+
+CREATE TABLE IF NOT EXISTS brand (
+    id_brand SERIAL PRIMARY KEY,
+    brand_name VARCHAR(50) NOT NULL UNIQUE,
+    logo_url VARCHAR(512)
+);
