@@ -8,8 +8,9 @@ import pool from "./config/database.js";
 //importamos rutas
 
 //importamos product routes
-import productRoutes from "./routes/product.routes.js";
 import itemRoutes from "./routes/itemRoutes.js";
+import productRoutes from "./routes/product.routes.js";
+import repuestoRoutes from "./routes/repuestoRoutes.js"
 import brandRoutes from "./routes/brandRoutes.js";
 
 //import productRoutes from "./routes/productRoutes.js";
@@ -26,6 +27,7 @@ app.use(cors());
 app.use('/api/products', productRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/brands', brandRoutes);
+app.use('/api/repuesto', repuestoRoutes)
 
 
 //health-check
