@@ -1,167 +1,45 @@
-import {itemMapper} from '../mappers/itemMapper.js';
-import { sealMapper } from '../mappers/sealMapper.js'; 
-import { bearingMapper } from '../mappers/bearingMapper.js';
+import { itemRepository } from "../repositories/itemRepository.js";
 
-// Controladores para items y subtipos (seals y bearings)
-//items
-export const getAllItems = async (req, res) => {
-    try{
-        const items = await itemMapper.getAllItems();
-        res.status(200).json({succes: true, message: "Items obtenidos correctamente", data: items});
-    }catch(error){
-        console.error('Error al obtener items:\n', error.message);
-        res.status(500).json({error: "Error al obtener items"});
-    }
+export const getAllItems = async (req,res)=> {
+    const items = await itemRepository.getAllItems();
+    res.status(200).json(items);
 };
-
-export const getItemByOem = async (req, res) =>{
+export const getItemById = async (req,res)=>{
     try{
-        const item = await itemMapper.getItemByOem(req.params.oemNumber);
-        if(!item){
-            return res.status(404).json({error: "Item no encontrado"});
+        const {idItem} = req.params;
+        const item = await itemRepository.getItemById(idItem);
+        if (!item){
+            return res.status(404).json({error: "problema al bucar el id"});
         }
-        res.status(200).json({success: true, message: "item obtenido correctamente", data: item});
+        res.status(200).json(item);
     }catch(error){
-        console.log('Error al obtener item:\n', error.message);
-        res.status(500).json({error: "Error al obtener item"});
+        console.error('error al obtener el item',error);
+        res.status(500).json({error: "error al obtener el item por id" })
     }
 };
-
+export const getItemByname = async(req,res)=>{
+    try{
+        const {itemName} = req.query;
+        if (!itemName){
+            return res.status(400).json({error:"debe ingresar el nombre a buscar"});
+        }
+        const rows = await itemRepository.getItemByName(itemName[0]);
+        if(!rows){
+            return res.status(404).json({error:"nose encontro el item"});
+        }
+        res.status(200).json({"info":"items encontrados por nombre \n",rows})
+    }catch(error){
+        console.error("error en la busqueda por nombre",error);
+        res.status(500).json({error:"error en la busqueda por nombre"});
+    }
+};
 export const createItem = async (req, res) => {
-    try{
-        // 1. Extraemos de forma limpia las variables usando destructuring de JS
-        const { tipo, especificaciones, ...itemData } = req.body;
-
-        // 2. CASO A: Si el usuario especifica que es un retén (seal, bearing, etc), entonces esperamos que venga un objeto 'especificaciones' con los datos técnicos, y llamamos a la función especializada de ese subtipo
-        if (tipo === 'seal') {
-            if (!especificaciones) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'Faltan las especificaciones técnicas del retén.' 
-                });
-            }
-            // Llamamos a la transacción que creamos en el sealMapper
-            const newSeal = await sealMapper.createSeal(itemData, especificaciones);
-            
-            return res.status(201).json({
-                success: true, 
-                message: "Retén (Seal) creado correctamente con sus especificaciones", 
-                data: newSeal
-            });
-        }else if (tipo === 'bearing') {
-            if (!especificaciones) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'Faltan las especificaciones técnicas del rodamiento.' 
-                });
-            }
-            // Llamamos a la transacción que creamos en el bearingMapper
-            const newBearing = await bearingMapper.createBearing(itemData, especificaciones);
-
-            return res.status(201).json({
-                success: true, 
-                message: "Rodamiento (Bearing) creado correctamente con sus especificaciones", 
-                data: newBearing
-            });
-        }
-
-        // 3. CASO B: Si es un ítem común y corriente (General sin subtipo)
-        const newItem = await itemMapper.createItem(itemData);
-        
-        return res.status(201).json({
-            success: true, 
-            message: "Item general creado correctamente", 
-            data: newItem
-        });
-
-    } catch (error) {
-        // Captura de claves duplicadas en Postgres (OEM único)
-        if (error.code === '23505') {
-            return res.status(400).json({ 
-                success: false,
-                error: `El Número OEM '${req.body.oemNumber}' ya existe`
-            });
-        }
-        
-        console.error('Error al crear item:', error.message);
-        return res.status(500).json({ 
-            success: false, 
-            error: "Error interno del servidor al crear el ítem" 
-        });
-    }
-};
-export const updateItem = async (req, res) => {
     try {
-        const { oemNumber } = req.params;
-        const { tipo, especificaciones, ...itemData } = req.body;
-
-        let updatedItem;
-
-        // Si desde el frontend nos dicen que el objeto editado es un seal (retén)
-        if (tipo === 'seal') {
-            updatedItem = await itemMapper.updateItem(oemNumber, itemData, especificaciones, tipo);
-        }else if (tipo === 'bearing') {
-            // Si desde el frontend nos dicen que el objeto editado es un bearing (rodamiento)
-            updatedItem = await itemMapper.updateItem(oemNumber, itemData, especificaciones, tipo);
-        } else {
-            // Si es un ítem general, el tercer parámetro se queda como null
-            updatedItem = await itemMapper.updateItem(oemNumber, itemData, null, null);
-        }
-
-        if (!updatedItem) {
-            return res.status(404).json({ success: false, error: 'El componente no existe.' });
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Componente actualizado correctamente",
-            data: updatedItem
-        });
-
+        const itemData = req.body;
+        const newItem = await itemRepository.createItem(itemData);
+        res.status(201).json(newItem);
     } catch (error) {
-        console.error('Error al actualizar ítem:', error.message);
-        res.status(500).json({ success: false, error: "Error interno al actualizar." });
+        console.error('Error al crear el item:', error);
+        res.status(500).json({error: 'Error al crear el item'});
     }
 };
-
-export const deleteItem = async (req, res) => {
-    try{
-        const deleted = await itemMapper.deleteItem(req.params.oemNumber);
-        if(!deleted){
-            return res.status(404).json({error: "Item no encontrado"});
-        }
-        res.status(200).json({success: true, message: "Item eliminado exitosamente"});
-    }catch(error){
-        console.error('Error al eliminar item:\n', error.message);
-        res.status(500).json({error: "Error al eliminar item"});
-    }
-};
-
-//seals
-export const getSealByOem = async (req, res) =>{
-    try{
-        const seal = await sealMapper.getSealByOem(req.params.oemNumber);
-        if(!seal){
-            return res.status(404).json({error: "Seal no encontrado"});
-        }
-        res.status(200).json({success: true, message: "Seal obtenido correctamente", data: seal});
-    }catch(error){
-        console.log('Error al obtener seal:\n', error.message);
-        res.status(500).json({error: "Error al obtener seal"});
-    }
-};
-
-//GET bering
-export const getBearingByOem = async (req, res) =>{
-    try{
-        const bearing = await bearingMapper.getBearingByOem(req.params.oemNumber);
-        if(!bearing){
-            return res.status(404).json({error: "Bearing no encontrado"});
-        }
-        res.status(200).json({success: true, message: "Bearing obtenido correctamente", data: bearing});
-    }catch(error){
-        console.log('Error al obtener bearing:\n', error.message);
-        res.status(500).json({error: "Error al obtener bearing"});
-    }
-}; 
-

@@ -10,7 +10,7 @@ INSERT INTO truck (truck_brand, truck_model, first_year, last_year) VALUES
 
 -- 2. Insertar Ítems en el Catálogo Maestro
 -- Guardamos URLs simuladas de Google Cloud Storage para que prepares tu Frontend
-INSERT INTO item (oem_number, item_name, item_description, photo, stock) VALUES
+INSERT INTO item (id_item, item_name, item_description, photo, stock) VALUES
 ('OEM-VAL-553', 'Válvula de Freno de Estacionamiento', 'Válvula neumática principal de control de freno para camiones pesados.', 'https://storage.googleapis.com/truck-parts-bucket/valvula_freno.jpg', 15),
 ('OEM-SEA-991', 'Retén de Cigüeñal Trasero', 'Retén de material Vitón de alta resistencia térmica para motores Volvo D13.', 'https://storage.googleapis.com/truck-parts-bucket/reten_ciguenal.jpg', 40),
 ('OEM-BEA-102', 'Rodamiento de Maza Delantera', 'Rodamiento cónico de rodillos de alta carga para eje delantero Scania.', 'https://storage.googleapis.com/truck-parts-bucket/rodamiento_maza.jpg', 24),
@@ -19,7 +19,7 @@ INSERT INTO item (oem_number, item_name, item_description, photo, stock) VALUES
 
 -- 3. Conectar Ítems con los Camiones (Muchos a Muchos)
 -- Asumiendo que los IDs de los camiones creados arriba son 1, 2 y 3 respectivamente
-INSERT INTO itemtruck (oem_number, id_truck) VALUES
+INSERT INTO itemtruck (id_item, id_truck) VALUES
 ('OEM-VAL-553', 1), -- La válvula sirve para el Volvo
 ('OEM-VAL-553', 2), -- La válvula también sirve para el Scania
 ('OEM-SEA-991', 1), -- El retén es exclusivo de Volvo
@@ -29,23 +29,23 @@ INSERT INTO itemtruck (oem_number, id_truck) VALUES
 -- 4. Población de Datos Específicos (Subtipos / Herencia)
 
 -- Datos técnicos del Retén
-INSERT INTO seal (oem_number, height, inner_diameter, outer_diameter, material) VALUES
+INSERT INTO seal (id_item, height, inner_diameter, outer_diameter, material) VALUES
 ('OEM-SEA-991', 12.50, 130.00, 160.00, 'Viton');
 
 -- Datos técnicos del Rodamiento
-INSERT INTO bearing (oem_number, code, height, inner_diameter, outer_diameter, type_bearing) VALUES
+INSERT INTO bearing (id_item, code, height, inner_diameter, outer_diameter, type_bearing) VALUES
 ('OEM-BEA-102', 'SET-413', 40.00, 65.00, 120.00, 'Conico');
 
 -- Datos técnicos de la Válvula
-INSERT INTO valve (oem_number, number_inputs, thread) VALUES
+INSERT INTO valve (id_item, number_inputs, thread) VALUES
 ('OEM-VAL-553', 4, 16.15);
 
 -- Datos técnicos del Sensor
-INSERT INTO sensor (oem_number, voltaje, pins) VALUES
+INSERT INTO sensor (id_item, voltaje, pins) VALUES
 ('OEM-SEN-004', 24, 4);
 
 -- Datos técnicos del Kit de Reparación (Apunta a la válvula OEM-VAL-553)
-INSERT INTO repairkit (oem_number, valve_compatibility, type_kit) VALUES
+INSERT INTO repairkit (id_item, valve_compatibility, type_kit) VALUES
 ('OEM-KIT-222', 'OEM-VAL-553', 'Completo');
 
 -- 5. Insertar Precios y Marcas Alternativas Comerciales (Tabla Repuesto)

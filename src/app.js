@@ -25,7 +25,7 @@ app.use(express.json());
 app.use(cors());
 //montaje de rutas
 app.use('/api/products', productRoutes);
-app.use('/api/items', itemRoutes);
+app.use('/api/item', itemRoutes);
 app.use('/api/brands', brandRoutes);
 app.use('/api/repuesto', repuestoRoutes)
 

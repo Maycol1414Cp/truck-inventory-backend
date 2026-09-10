@@ -1,18 +1,15 @@
 import { Router } from "express";
 import {
     getAllItems,
-    getItemByOem,
-    createItem,
-    updateItem,
-    deleteItem
+    getItemById,
+    getItemByname,
+    createItem
 } from "../controllers/itemController.js";
 
 const router = Router();
 
-router.get("/", getAllItems);
-router.get("/:oemNumber", getItemByOem);
-router.post("/", createItem);
-router.patch("/:oemNumber", updateItem);
-router.delete("/:oemNumber", deleteItem);
-
+router.get("/",getAllItems);
+router.get("/:idItem",getItemById);
+router.get("/", getItemByname);
+router.post("/",createItem);
 export default router;

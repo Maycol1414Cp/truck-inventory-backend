@@ -5,7 +5,7 @@ export const sealMapper = {
     toDomain(dbRow) {
         if (!dbRow) return null;
         return {
-            oemNumber: dbRow.oem_number,
+            oemNumber: dbRow.id_item,
             itemName: dbRow.item_name,
             itemDescription: dbRow.item_description,
             photo: dbRow.photo,
@@ -31,10 +31,10 @@ export const sealMapper = {
                     COALESCE(SUM(r.stock), 0) AS stock_total
                 FROM item i
                 -- ⚠INNER JOIN: Si el OEM no existe en la tabla seal, el query no devolverá nada
-                INNER JOIN seal s ON i.oem_number = s.oem_number
-                LEFT JOIN repuesto r ON i.oem_number = r.oem_code
-                WHERE i.oem_number = $1
-                GROUP BY i.oem_number, s.oem_number, s.height, s.inner_diameter, s.outer_diameter, s.material;
+                INNER JOIN seal s ON i.id_item = s.id_item
+                LEFT JOIN repuesto r ON i.id_item = r.oem_code
+                WHERE i.id_item = $1
+                GROUP BY i.id_item, s.id_item, s.height, s.inner_diameter, s.outer_diameter, s.material;
             `;
 
             const { rows } = await pool.query(query, [oemNumber]);
@@ -54,7 +54,7 @@ export const sealMapper = {
 
             // 2. Inserción en la tabla maestra 'item'
             const itemQuery = `
-                INSERT INTO item (oem_number, item_name, item_description, photo)
+                INSERT INTO item (id_item, item_name, item_description, photo)
                 VALUES ($1, $2, $3, $4)
                 RETURNING *;
             `;
@@ -68,7 +68,7 @@ export const sealMapper = {
 
             // 3. Inserción en la tabla especializada 'seal'
             const sealQuery = `
-                INSERT INTO seal (oem_number, height, inner_diameter, outer_diameter, material)
+                INSERT INTO seal (id_item, height, inner_diameter, outer_diameter, material)
                 VALUES ($1, $2, $3, $4, $5)
                 RETURNING *;
             `;
@@ -107,7 +107,7 @@ export const sealMapper = {
             const query = `
             UPDATE seal 
             SET  height = $1, inner_diameter = $2, outer_diameter = $3, material = $4
-            WHERE oem_number = $5
+            WHERE id_item = $5
             RETURNING *;`;
             const { rows } = await pool.query(query, values);
             
@@ -120,7 +120,7 @@ export const sealMapper = {
     //delete
     async deleteSeal(oemNumber){
         try{
-            const query = `DELETE FROM seal WHERE oem_number = $1 RETURNING *;`;
+            const query = `DELETE FROM seal WHERE id_item = $1 RETURNING *;`;
             const { rows } = await pool.query(query, [oemNumber]);
             return this.toDomain(rows[0]);
         }catch(error){

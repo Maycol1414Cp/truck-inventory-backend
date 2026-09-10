@@ -6,14 +6,14 @@ const bearingMapper = {
     toDomain(dbRow) {
         if (!dbRow) return null;
         return {
-            oemNumber: dbRow.oem_number,
+            oemNumber: dbRow.id_item,
             itemName: dbRow.item_name,
             itemDescription: dbRow.item_description,
             photo: dbRow.photo,
             stock: parseInt(dbRow.stock_total) || 0,
             tipo: 'bearing',
             especificaciones: {
-                oemNumber: dbRow.oem_number,
+                oemNumber: dbRow.id_item,
                 code: dbRow.code,
                 height: parseFloat(dbRow.height),
                 innerDiameter: parseFloat(dbRow.inner_diameter),
@@ -32,10 +32,10 @@ const bearingMapper = {
                     COALESCE(SUM(r.stock), 0) AS stock_total
                 FROM item i
                 -- ⚠INNER JOIN: Si el OEM no existe en la tabla bearing, el query no devolverá nada
-                INNER JOIN bearing b ON i.oem_number = b.oem_number
-                LEFT JOIN repuesto r ON i.oem_number = r.oem_code
-                WHERE i.oem_number = $1
-                GROUP BY i.oem_number, b.code , b.oem_number, b.height, b.inner_diameter, b.outer_diameter, b.type_bearing;`;
+                INNER JOIN bearing b ON i.id_item = b.id_item
+                LEFT JOIN repuesto r ON i.id_item = r.oem_code
+                WHERE i.id_item = $1
+                GROUP BY i.id_item, b.code , b.id_item, b.height, b.inner_diameter, b.outer_diameter, b.type_bearing;`;
 
             const { rows } = await pool.query(query, [oemNumber]);
             return this.toDomain(rows[0]);
@@ -53,7 +53,7 @@ const bearingMapper = {
 
             // 2. Inserción en la tabla maestra 'item'
             const itemQuery = `
-                INSERT INTO item (oem_number, item_name, item_description, photo)
+                INSERT INTO item (id_item, item_name, item_description, photo)
                 VALUES ($1, $2, $3, $4)
                 RETURNING *;
             `;
@@ -67,7 +67,7 @@ const bearingMapper = {
 
             // 3. Inserción en la tabla especializada 'bearing'
             const bearingQuery = `
-                INSERT INTO bearing (oem_number, code, height, inner_diameter, outer_diameter, type_bearing)
+                INSERT INTO bearing (id_item, code, height, inner_diameter, outer_diameter, type_bearing)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *;
             `;
@@ -109,7 +109,7 @@ const bearingMapper = {
             const query = `
             UPDATE bearing 
             SET  code = $1, height = $2, inner_diameter = $3, outer_diameter = $4, type_bearing = $5
-            WHERE oem_number = $6
+            WHERE id_item = $6
             RETURNING *;`;
             const { rows } = await pool.query(query, values);
             
@@ -123,7 +123,7 @@ const bearingMapper = {
     //delete
     async deleteBearing(oemNumber){
         try{
-            const query = `DELETE FROM bearing WHERE oem_number = $1 RETURNING *;`;
+            const query = `DELETE FROM bearing WHERE id_item = $1 RETURNING *;`;
             const { rows } = await pool.query(query, [oemNumber]);
             return this.toDomain({success: true, message: 'bearing '+ oemNumber + ' eliminado correctamente', data: rows[0]});
         }catch(error){
