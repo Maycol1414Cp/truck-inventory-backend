@@ -8,3 +8,10 @@ node_modules/
 # Logs y basura del sistema
 npm-debug.log*
 .DS_Store
+
+# Archivos multimedia generados localmente
+uploads/**/*.webp
+!uploads/**/.gitkeep
+
+# CLI local
+agy
