@@ -1,56 +1,107 @@
-import "dotenv/config";
-import express from "express";
-import cors from "cors";
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-//importamos controlador de la db
-import pool from "./config/database.js";
+// Conexión y Pool de Base de Datos
+import pool from './config/database.js';
 
-//importamos rutas
+// Rutas de Módulos (v1)
+import catalogRoutes from './modules/catalog/routes/catalog.routes.js';
+import inventoryRoutes from './modules/inventory/routes/inventory.routes.js';
+import posRoutes from './modules/pos/routes/pos.routes.js';
+import vehicleRoutes from './modules/compatibility/routes/vehicle.routes.js';
+import analyticsRoutes from './modules/analytics/routes/analytics.routes.js';
 
-//importamos product routes
-import itemRoutes from "./routes/itemRoutes.js";
-import productRoutes from "./routes/product.routes.js";
-import repuestoRoutes from "./routes/repuestoRoutes.js"
-import brandRoutes from "./routes/brandRoutes.js";
+// Documentación de API con Scalar (OpenAPI 3.1)
+import { apiReference } from '@scalar/express-api-reference';
+import { openApiSpec } from './docs/openapi.js';
 
-//import productRoutes from "./routes/productRoutes.js";
+// Middleware Central de Errores
+import { errorHandler } from './common/errors/errorHandler.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
-//middlewares
-
-//permitir recibir datos en formato json
-app.use(express.json());
-//permitir acceso desde otro dominio
+// =========================================================================
+// MIDDLEWARES GLOBALES
+// =========================================================================
 app.use(cors());
-//montaje de rutas
-app.use('/api/products', productRoutes);
-app.use('/api/item', itemRoutes);
-app.use('/api/brands', brandRoutes);
-app.use('/api/repuesto', repuestoRoutes)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
+// Servir archivos estáticos subidos (imágenes procesadas WebP y thumbnails)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-//health-check
+// =========================================================================
+// HEALTH-CHECK
+// =========================================================================
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', uptime: process.uptime() });
+  res.status(200).json({
+    success: true,
+    data: {
+      status: 'HEALTHY',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
+    }
+  });
 });
 
-
-//montar routes
-//app.use('/api/products', productRoutes);
-
-//iniciar servidor
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📡 Connecting to GCP Database at ${process.env.DB_HOST}`);
+// =========================================================================
+// DOCUMENTACIÓN INTERACTIVA CON SCALAR (/docs y /reference)
+// =========================================================================
+app.get('/openapi.json', (req, res) => {
+  res.status(200).json(openApiSpec);
 });
-// En tu app.js o database.js agrega esto para debug:
-pool.connect((err, client, release) => {
-  if (err) {
-    return console.error('❌ Error adquiriendo cliente:\n', err.stack);
-  }
-  console.log('✅ Conexión exitosa a la base de datos en GCP');
-  release();
+
+const scalarMiddleware = apiReference({
+  spec: {
+    content: openApiSpec
+  },
+  theme: 'purple',
+  pageTitle: 'Truck Parts ERP & POS - Scalar API Reference'
 });
+
+app.use('/docs', scalarMiddleware);
+app.use('/reference', scalarMiddleware);
+
+// =========================================================================
+// MONTAJE DE RUTAS REST API (/api/v1)
+// =========================================================================
+app.use('/api/v1/catalog', catalogRoutes);
+app.use('/api/v1/inventory', inventoryRoutes);
+app.use('/api/v1/pos', posRoutes);
+app.use('/api/v1/vehicles', vehicleRoutes);
+app.use('/api/v1/analytics', analyticsRoutes);
+
+// Manejo de rutas no encontradas (404)
+app.use((req, res, next) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'ROUTE_NOT_FOUND',
+      message: `La ruta ${req.method} ${req.originalUrl} no existe en el servidor.`,
+      details: []
+    }
+  });
+});
+
+// =========================================================================
+// MIDDLEWARE GLOBAL DE MANEJO DE ERRORES (Express 5)
+// =========================================================================
+app.use(errorHandler);
+
+// Iniciar servidor solo si no es importado por pruebas
+const PORT = parseInt((process.env.PORT || '3000').toString().trim(), 10);
+
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor Express 5 escuchando en el puerto ${PORT}`);
+    console.log(`📡 Base de datos conectada en ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
+  });
+}
+
+export default app;
