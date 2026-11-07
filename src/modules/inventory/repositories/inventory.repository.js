@@ -4,13 +4,19 @@ import { inventoryMapper } from '../mappers/inventory.mapper.js';
 export const inventoryRepository = {
   async findByBranch(idSucursal, { tipoAlmacen = null, search = null, page = 1, limit = 50 } = {}, client = pool) {
     const offset = (page - 1) * limit;
-    const conditions = ['st.id_sucursal = $1'];
+    const conditions = ['i.is_active = TRUE'];
     const values = [idSucursal];
     let paramIndex = 2;
 
     if (tipoAlmacen) {
-      conditions.push(`st.tipo_almacen = $${paramIndex++}`);
-      values.push(tipoAlmacen.toUpperCase());
+      const upper = tipoAlmacen.toUpperCase();
+      if (upper === 'DEPOSITO') {
+        conditions.push(`(st.tipo_almacen = $${paramIndex++} OR st.id_inventario IS NULL)`);
+        values.push(upper);
+      } else {
+        conditions.push(`st.tipo_almacen = $${paramIndex++}`);
+        values.push(upper);
+      }
     }
 
     if (search && search.trim()) {
@@ -18,7 +24,17 @@ export const inventoryRepository = {
         i.item_name ILIKE $${paramIndex} 
         OR i.sku ILIKE $${paramIndex}
         OR b.brand_name ILIKE $${paramIndex}
-        OR st.pasillo ILIKE $${paramIndex}
+        OR COALESCE(st.pasillo, '') ILIKE $${paramIndex}
+        OR EXISTS (
+          SELECT 1 FROM item_oem io
+          WHERE io.id_item = i.id_item AND io.oem_code ILIKE $${paramIndex}
+        )
+        OR EXISTS (
+          SELECT 1 FROM item_truck_compatibility c
+          JOIN truck t ON c.id_truck = t.id_truck
+          WHERE c.id_item = i.id_item
+            AND (t.truck_brand ILIKE $${paramIndex} OR t.truck_model ILIKE $${paramIndex})
+        )
       )`);
       values.push(`%${search.trim()}%`);
       paramIndex++;
@@ -28,39 +44,58 @@ export const inventoryRepository = {
 
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM inventario_stock st
-      JOIN item i ON st.id_item = i.id_item
+      FROM item i
+      LEFT JOIN inventario_stock st ON st.id_item = i.id_item AND st.id_sucursal = $1
       LEFT JOIN brand b ON i.id_brand = b.id_brand
       ${whereClause};
     `;
-    const { rows: [{ total }] } = await client.query(countQuery, values);
+    const { rows: [{ total }] = [{ total: 0 }] } = await client.query(countQuery, values);
 
     const dataQuery = `
       SELECT 
-        st.id_inventario,
-        st.id_item,
+        COALESCE(st.id_inventario, 0) AS id_inventario,
+        i.id_item,
         i.item_name,
         i.sku,
         i.price,
         i.cost,
         b.id_brand,
         b.brand_name,
-        st.id_sucursal,
+        $1::int AS id_sucursal,
         s.name AS sucursal_nombre,
-        st.tipo_almacen,
-        st.pasillo,
-        st.estante,
-        st.seccion,
-        st.cantidad,
-        st.stock_minimo,
+        COALESCE(st.tipo_almacen, 'DEPOSITO') AS tipo_almacen,
+        COALESCE(st.pasillo, 'P-01') AS pasillo,
+        COALESCE(st.estante, 'E-02') AS estante,
+        COALESCE(st.seccion, 'S-01') AS seccion,
+        COALESCE(st.cantidad, 0) AS cantidad,
+        COALESCE(st.stock_minimo, 3) AS stock_minimo,
         st.stock_maximo,
-        st.updated_at
-      FROM inventario_stock st
-      JOIN item i ON st.id_item = i.id_item
-      JOIN sucursal s ON st.id_sucursal = s.id_sucursal
+        COALESCE(st.updated_at, i.created_at) AS updated_at,
+        COALESCE(
+          (
+            SELECT json_agg(DISTINCT io.oem_code)
+            FROM item_oem io
+            JOIN item i_sib ON io.id_item = i_sib.id_item
+            WHERE io.id_item = i.id_item
+               OR LOWER(TRIM(i_sib.item_name)) = LOWER(TRIM(i.item_name))
+          ), '[]'::json
+        ) AS oem_codes,
+        COALESCE(
+          (
+            SELECT json_agg(DISTINCT TRIM(t.truck_brand || ' ' || t.truck_model))
+            FROM item_truck_compatibility c
+            JOIN truck t ON c.id_truck = t.id_truck
+            JOIN item i_sib ON c.id_item = i_sib.id_item
+            WHERE c.id_item = i.id_item
+               OR LOWER(TRIM(i_sib.item_name)) = LOWER(TRIM(i.item_name))
+          ), '[]'::json
+        ) AS compatible_trucks
+      FROM item i
+      LEFT JOIN inventario_stock st ON st.id_item = i.id_item AND st.id_sucursal = $1
+      LEFT JOIN sucursal s ON s.id_sucursal = $1
       LEFT JOIN brand b ON i.id_brand = b.id_brand
       ${whereClause}
-      ORDER BY i.item_name ASC, st.tipo_almacen ASC
+      ORDER BY i.id_item DESC, st.id_inventario DESC NULLS LAST
       LIMIT $${paramIndex++} OFFSET $${paramIndex++};
     `;
 

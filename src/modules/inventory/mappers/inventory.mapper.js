@@ -19,6 +19,8 @@ export const inventoryMapper = {
       cantidad: parseInt(row.cantidad, 10),
       stockMinimo: parseInt(row.stock_minimo, 10),
       stockMaximo: row.stock_maximo !== null ? parseInt(row.stock_maximo, 10) : null,
+      oemCodes: Array.isArray(row.oem_codes) ? row.oem_codes : [],
+      compatibleTrucks: Array.isArray(row.compatible_trucks) ? row.compatible_trucks : [],
       updatedAt: row.updated_at
     };
   },

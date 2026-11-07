@@ -15,12 +15,6 @@ export const branchService = {
   },
 
   async createBranch(branchData) {
-    if (!branchData.code || !branchData.code.trim()) {
-      throw new AppError('El código de la sucursal es obligatorio.', 422, 'VALIDATION_FAILED', [
-        { field: 'code', message: 'No puede estar vacío.' }
-      ]);
-    }
-
     if (!branchData.name || !branchData.name.trim()) {
       throw new AppError('El nombre de la sucursal es obligatorio.', 422, 'VALIDATION_FAILED', [
         { field: 'name', message: 'No puede estar vacío.' }
@@ -33,13 +27,40 @@ export const branchService = {
       ]);
     }
 
-    const existingCode = await branchRepository.findByCode(branchData.code.trim());
-    if (existingCode) {
-      throw new AppError(`El código de sucursal '${branchData.code}' ya existe.`, 409, 'BRANCH_CODE_ALREADY_EXISTS');
+    let finalCode = branchData.code && branchData.code.trim()
+      ? branchData.code.trim().toUpperCase()
+      : null;
+
+    const allBranches = await branchRepository.findAll({ includeInactive: true });
+
+    if (!finalCode) {
+      let maxNum = allBranches.length;
+      for (const b of allBranches) {
+        const match = String(b.code || '').match(/(\d+)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+        if (b.idSucursal && b.idSucursal > maxNum) {
+          maxNum = b.idSucursal;
+        }
+      }
+      finalCode = `SUC-${String(maxNum + 1).padStart(2, '0')}`;
+    }
+
+    let existingCode = await branchRepository.findByCode(finalCode);
+    let attempt = 1;
+    while (existingCode) {
+      const nextNum = allBranches.length + attempt + 1;
+      finalCode = `SUC-${String(nextNum).padStart(2, '0')}`;
+      existingCode = await branchRepository.findByCode(finalCode);
+      attempt++;
     }
 
     return await branchRepository.create({
-      code: branchData.code.trim().toUpperCase(),
+      code: finalCode,
       name: branchData.name.trim(),
       address: branchData.address.trim(),
       phone: branchData.phone ? branchData.phone.trim() : null,
