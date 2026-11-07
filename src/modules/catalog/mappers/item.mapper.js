@@ -16,6 +16,13 @@ export const itemMapper = {
       try { oems = JSON.parse(row.oems); } catch (_) { oems = []; }
     }
 
+    let brandVariants = [];
+    if (Array.isArray(row.brand_variants)) {
+      brandVariants = row.brand_variants;
+    } else if (typeof row.brand_variants === 'string') {
+      try { brandVariants = JSON.parse(row.brand_variants); } catch (_) { brandVariants = []; }
+    }
+
     return {
       idItem: row.id_item,
       itemName: row.item_name,
@@ -44,6 +51,16 @@ export const itemMapper = {
         brandOrigin: o.brand_origin,
         oemType: o.oem_type,
         isMain: Boolean(o.is_main)
+      })),
+      brandVariants: brandVariants.map(v => ({
+        idItem: v.id_item,
+        idBrand: v.id_brand,
+        brandName: v.brand_name || null,
+        brandCountry: v.country || null,
+        sku: v.sku,
+        cost: parseFloat(v.cost || 0),
+        price: parseFloat(v.price || 0),
+        isActive: v.is_active !== undefined ? Boolean(v.is_active) : true
       }))
     };
   },

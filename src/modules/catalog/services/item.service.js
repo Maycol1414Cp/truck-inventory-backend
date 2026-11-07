@@ -7,11 +7,32 @@ import { cleanOemCode } from '../../../common/utils/stringSanitizer.js';
 import { withTransaction } from '../../../common/utils/transactionHelper.js';
 import { AppError } from '../../../common/errors/AppError.js';
 
+/**
+ * Genera automáticamente un código SKU técnico estandarizado:
+ * Formato: {PREFIJO_REPUESTO_3}-{PREFIJO_MARCA_3}-{ID_000} (ej. VAL-WAB-011)
+ */
+function buildAutoSku(itemName, brandName, idItem) {
+  const cleanPrefix = (str, fallback) => {
+    const normalized = (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toUpperCase();
+    return (normalized + fallback).slice(0, 3);
+  };
+  const itemPart = cleanPrefix(itemName, 'REP');
+  const brandPart = cleanPrefix(brandName, 'GEN');
+  const seqPart = String(idItem).padStart(3, '0');
+  return `${itemPart}-${brandPart}-${seqPart}`;
+}
+
 export const itemService = {
   async getAllItems(queryParams = {}) {
     const page = Math.max(1, parseInt(queryParams.page || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(queryParams.limit || '20', 10)));
-    const brandId = queryParams.brandId ? parseInt(queryParams.brandId, 10) : null;
+    const brandId = queryParams.brandId || queryParams.idBrand
+      ? parseInt(queryParams.brandId || queryParams.idBrand, 10)
+      : null;
     const isActive = queryParams.isActive !== undefined ? queryParams.isActive === 'true' : true;
 
     return await itemRepository.findAll({ page, limit, brandId, isActive });
@@ -42,23 +63,63 @@ export const itemService = {
       throw new AppError(`La marca con ID ${itemData.idBrand} no existe.`, 404, 'BRAND_NOT_FOUND');
     }
 
-    if (itemData.sku && itemData.sku.trim()) {
-      const existingSku = await itemRepository.findBySku(itemData.sku.trim());
+    const providedSku = itemData.sku && itemData.sku.trim()
+      ? itemData.sku.trim().toUpperCase()
+      : null;
+
+    if (providedSku) {
+      const existingSku = await itemRepository.findBySku(providedSku);
       if (existingSku) {
-        throw new AppError(`El SKU '${itemData.sku}' ya está registrado.`, 409, 'SKU_ALREADY_EXISTS');
+        throw new AppError(`El SKU '${providedSku}' ya está registrado.`, 409, 'SKU_ALREADY_EXISTS');
       }
     }
 
     return await withTransaction(async (client) => {
+      const trimmedName = itemData.itemName.trim();
+      const parsedPrice = itemData.price !== undefined ? parseFloat(itemData.price) : 0;
+      const parsedCost = itemData.cost !== undefined && itemData.cost !== null && itemData.cost !== ''
+        ? parseFloat(itemData.cost)
+        : 0;
+
       const newItem = await itemRepository.create({
-        itemName: itemData.itemName.trim(),
-        itemDescription: itemData.itemDescription ? itemData.itemDescription.trim() : '',
+        itemName: trimmedName,
+        itemDescription: itemData.itemDescription && itemData.itemDescription.trim()
+          ? itemData.itemDescription.trim()
+          : `${trimmedName} (${brand.brandName})`,
         idBrand: itemData.idBrand,
-        sku: itemData.sku ? itemData.sku.trim().toUpperCase() : null,
-        cost: itemData.cost !== undefined ? parseFloat(itemData.cost) : 0,
-        price: itemData.price !== undefined ? parseFloat(itemData.price) : 0,
+        sku: providedSku,
+        cost: isNaN(parsedCost) ? 0 : parsedCost,
+        price: isNaN(parsedPrice) ? 0 : parsedPrice,
         isActive: itemData.isActive !== undefined ? Boolean(itemData.isActive) : true
       }, client);
+
+      // Si no se envió SKU, generarlo automáticamente a partir de Nombre + Marca + ID
+      if (!providedSku) {
+        let generatedSku = buildAutoSku(trimmedName, brand.brandName, newItem.idItem);
+        const collision = await itemRepository.findBySku(generatedSku, client);
+        if (collision && collision.idItem !== newItem.idItem) {
+          generatedSku = `${generatedSku}-${Math.floor(10 + Math.random() * 89)}`;
+        }
+        await itemRepository.update(newItem.idItem, { sku: generatedSku }, client);
+      }
+
+      // Si existen otras marcas del mismo repuesto (mismo nombre),
+      // heredar automáticamente la compatibilidad de camiones (es el mismo repuesto para el mismo camión)
+      const { rows: existingCompat } = await client.query(
+        `SELECT DISTINCT c.id_truck, c.position_note
+         FROM item_truck_compatibility c
+         JOIN item i ON c.id_item = i.id_item
+         WHERE i.item_name ILIKE $1 AND i.id_item <> $2;`,
+        [trimmedName, newItem.idItem]
+      );
+      for (const comp of existingCompat) {
+        await client.query(
+          `INSERT INTO item_truck_compatibility (id_item, id_truck, position_note)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (id_item, id_truck) DO NOTHING;`,
+          [newItem.idItem, comp.id_truck, comp.position_note]
+        );
+      }
 
       // Si se envían códigos OEM iniciales en la creación
       if (Array.isArray(itemData.oems) && itemData.oems.length > 0) {
@@ -68,7 +129,7 @@ export const itemService = {
               idItem: newItem.idItem,
               oemCode: o.oemCode.trim(),
               cleanOemCode: cleanOemCode(o.oemCode),
-              brandOrigin: o.brandOrigin ? o.brandOrigin.trim() : null,
+              brandOrigin: o.brandOrigin ? o.brandOrigin.trim() : brand.brandName,
               oemType: o.oemType || 'ORIGINAL',
               isMain: Boolean(o.isMain)
             }, client);

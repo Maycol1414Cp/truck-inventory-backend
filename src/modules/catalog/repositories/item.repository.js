@@ -51,14 +51,34 @@ export const itemRepository = {
               'is_main', o.is_main
             )
           ) FILTER (WHERE o.id_item_oem IS NOT NULL), '[]'
-        ) AS oems
+        ) AS oems,
+        COALESCE(
+          (
+            SELECT json_agg(
+              jsonb_build_object(
+                'id_item', iv.id_item,
+                'id_brand', iv.id_brand,
+                'brand_name', bv.brand_name,
+                'country', bv.country,
+                'sku', iv.sku,
+                'cost', iv.cost,
+                'price', iv.price,
+                'is_active', iv.is_active
+              ) ORDER BY iv.price ASC, iv.id_item ASC
+            )
+            FROM item iv
+            LEFT JOIN brand bv ON iv.id_brand = bv.id_brand
+            WHERE LOWER(TRIM(iv.item_name)) = LOWER(TRIM(i.item_name))
+              AND iv.is_active = TRUE
+          ), '[]'
+        ) AS brand_variants
       FROM item i
       LEFT JOIN brand b ON i.id_brand = b.id_brand
       LEFT JOIN item_image img ON i.id_item = img.id_item
       LEFT JOIN item_oem o ON i.id_item = o.id_item
       ${whereClause}
       GROUP BY i.id_item, b.brand_name, b.country, b.logo_url
-      ORDER BY i.id_item ASC
+      ORDER BY i.id_item DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++};
     `;
 
@@ -102,7 +122,27 @@ export const itemRepository = {
               'is_main', o.is_main
             )
           ) FILTER (WHERE o.id_item_oem IS NOT NULL), '[]'
-        ) AS oems
+        ) AS oems,
+        COALESCE(
+          (
+            SELECT json_agg(
+              jsonb_build_object(
+                'id_item', iv.id_item,
+                'id_brand', iv.id_brand,
+                'brand_name', bv.brand_name,
+                'country', bv.country,
+                'sku', iv.sku,
+                'cost', iv.cost,
+                'price', iv.price,
+                'is_active', iv.is_active
+              ) ORDER BY iv.price ASC, iv.id_item ASC
+            )
+            FROM item iv
+            LEFT JOIN brand bv ON iv.id_brand = bv.id_brand
+            WHERE LOWER(TRIM(iv.item_name)) = LOWER(TRIM(i.item_name))
+              AND iv.is_active = TRUE
+          ), '[]'
+        ) AS brand_variants
       FROM item i
       LEFT JOIN brand b ON i.id_brand = b.id_brand
       LEFT JOIN item_image img ON i.id_item = img.id_item
@@ -221,6 +261,7 @@ export const itemRepository = {
         i.id_item,
         i.item_name,
         i.item_description,
+        i.id_brand,
         i.sku,
         i.price,
         i.cost,
@@ -232,6 +273,41 @@ export const itemRepository = {
           (SELECT thumbnail_url FROM item_image WHERE id_item = i.id_item AND is_primary = TRUE LIMIT 1),
           (SELECT thumbnail_url FROM item_image WHERE id_item = i.id_item ORDER BY display_order ASC LIMIT 1)
         ) AS thumbnail_url,
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id_item_oem', io.id_item_oem,
+                'oem_code', io.oem_code,
+                'clean_oem_code', io.clean_oem_code,
+                'brand_origin', io.brand_origin,
+                'oem_type', io.oem_type,
+                'is_main', io.is_main
+              )
+            )
+            FROM item_oem io
+            WHERE io.id_item = i.id_item
+          ), '[]'::jsonb
+        ) AS oems,
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id_item', iv.id_item,
+                'id_brand', iv.id_brand,
+                'brand_name', bv.brand_name,
+                'sku', iv.sku,
+                'cost', iv.cost,
+                'price', iv.price,
+                'is_active', iv.is_active
+              ) ORDER BY iv.price ASC
+            )
+            FROM item iv
+            LEFT JOIN brand bv ON iv.id_brand = bv.id_brand
+            WHERE LOWER(TRIM(iv.item_name)) = LOWER(TRIM(i.item_name))
+              AND iv.is_active = TRUE
+          ), '[]'::jsonb
+        ) AS brand_variants,
         GREATEST(word_similarity($1, i.item_name), similarity(i.item_name, $1)) AS similarity_score
       FROM item i
       LEFT JOIN brand b ON i.id_brand = b.id_brand
@@ -254,12 +330,30 @@ export const itemRepository = {
       idItem: r.id_item,
       itemName: r.item_name,
       itemDescription: r.item_description,
+      idBrand: r.id_brand,
       sku: r.sku,
       price: parseFloat(r.price || 0),
       cost: parseFloat(r.cost || 0),
       brandName: r.brand_name,
       brandLogoUrl: r.logo_url,
       thumbnailUrl: r.thumbnail_url,
+      oems: (r.oems || []).map(o => ({
+        idItemOem: o.id_item_oem,
+        oemCode: o.oem_code,
+        cleanOemCode: o.clean_oem_code,
+        brandOrigin: o.brand_origin,
+        oemType: o.oem_type,
+        isMain: Boolean(o.is_main)
+      })),
+      brandVariants: (r.brand_variants || []).map(v => ({
+        idItem: v.id_item,
+        idBrand: v.id_brand,
+        brandName: v.brand_name,
+        sku: v.sku,
+        cost: parseFloat(v.cost || 0),
+        price: parseFloat(v.price || 0),
+        isActive: Boolean(v.is_active)
+      })),
       similarityScore: parseFloat(r.similarity_score || 0)
     }));
   }

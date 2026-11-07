@@ -11,7 +11,9 @@ export const errorHandler = (err, req, res, next) => {
     success: false,
     error: {
       code: errorCode,
-      message: err.isOperational ? err.message : 'Ha ocurrido un error interno en el servidor.',
+      message: err.isOperational
+        ? err.message
+        : `Error interno del servidor (${errorCode}): ${err.message}`,
       details: err.details || []
     }
   });

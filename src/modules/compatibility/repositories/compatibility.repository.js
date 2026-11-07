@@ -3,18 +3,36 @@ import pool from '../../../config/database.js';
 export const compatibilityRepository = {
   /**
    * Vincula un repuesto a un modelo de camión.
-   * Si ya existe la relación, actualiza la nota de posición (idempotente).
+   * Propaga automáticamente la compatibilidad a todas las variantes de marca del mismo repuesto.
    */
   async linkItemToTruck(idItem, idTruck, positionNote = null) {
-    const sql = `
-      INSERT INTO item_truck_compatibility (id_item, id_truck, position_note)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (id_item, id_truck) 
-      DO UPDATE SET position_note = EXCLUDED.position_note
-      RETURNING *;
-    `;
-    const result = await pool.query(sql, [idItem, idTruck, positionNote ? positionNote.trim() : null]);
-    return result.rows[0];
+    const cleanNote = positionNote ? positionNote.trim() : null;
+    const { rows: siblingItems } = await pool.query(
+      `SELECT i2.id_item
+       FROM item i1
+       JOIN item i2 ON i2.item_name ILIKE i1.item_name
+       WHERE i1.id_item = $1;`,
+      [idItem]
+    );
+    const targetIds = siblingItems.length > 0
+      ? siblingItems.map(r => r.id_item)
+      : [idItem];
+
+    let primaryRow = null;
+    for (const targetItemId of targetIds) {
+      const sql = `
+        INSERT INTO item_truck_compatibility (id_item, id_truck, position_note)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (id_item, id_truck) 
+        DO UPDATE SET position_note = EXCLUDED.position_note
+        RETURNING *;
+      `;
+      const result = await pool.query(sql, [targetItemId, idTruck, cleanNote]);
+      if (targetItemId === idItem || !primaryRow) {
+        primaryRow = result.rows[0];
+      }
+    }
+    return primaryRow;
   },
 
   /**

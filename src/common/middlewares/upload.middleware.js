@@ -4,9 +4,26 @@ import { AppError } from '../errors/AppError.js';
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+  ];
+  const ext = (file.originalname || '').toLowerCase();
+  const hasValidExt =
+    ext.endsWith('.jpg') ||
+    ext.endsWith('.jpeg') ||
+    ext.endsWith('.png') ||
+    ext.endsWith('.webp') ||
+    ext.endsWith('.heic');
 
-  if (allowedMimeTypes.includes(file.mimetype)) {
+  if (
+    allowedMimeTypes.includes(file.mimetype) ||
+    (file.mimetype === 'application/octet-stream' && hasValidExt)
+  ) {
     cb(null, true);
   } else {
     cb(
