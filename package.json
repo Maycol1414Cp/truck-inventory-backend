@@ -4,6 +4,7 @@
   "description": "Sistema integral de inventarios multi-sucursal y POS para repuestos de camiones",
   "main": "src/app.js",
   "type": "module",
+  "packageManager": "pnpm@11.1.3",
   "scripts": {
     "dev": "nodemon src/app.js",
     "start": "node src/app.js",

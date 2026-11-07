@@ -7,11 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Habilitar pnpm mediante Corepack (incluido en Node 22)
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Habilitar pnpm mediante Corepack (versión fijada = misma usada para generar pnpm-lock.yaml)
+RUN corepack enable && corepack prepare pnpm@11.1.3 --activate
 
-# Copiar manifiestos e instalar únicamente dependencias de producción
-COPY package.json pnpm-lock.yaml ./
+# Copiar manifiestos (incluye pnpm-workspace.yaml con allowBuilds: sharp) e instalar solo producción
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 
 # Copiar el código fuente del servidor
