@@ -23,12 +23,12 @@ API RESTful de alto rendimiento para la gestión integral de repuestos de camion
   },
   servers: [
     {
-      url: 'http://localhost:8080',
-      description: 'Servidor Local de Desarrollo'
+      url: '/',
+      description: 'Servidor actual (mismo origen que /docs — Cloud Run o local)'
     },
     {
-      url: 'https://api.truckparts-erp.com',
-      description: 'Entorno de Producción Cloud'
+      url: 'http://localhost:8080',
+      description: 'Servidor Local de Desarrollo'
     }
   ],
   tags: [
