@@ -278,6 +278,26 @@ CREATE INDEX IF NOT EXISTS idx_venta_detalle_item ON venta_detalle (id_item);
 -- 9. VISTA: ALERTAS DE REPOSICIÓN TIENDA VS. DEPÓSITO
 -- =========================================================================
 CREATE OR REPLACE VIEW v_alertas_reposicion_interna AS
+WITH hub_info AS (
+    SELECT id_sucursal, name
+    FROM sucursal
+    WHERE is_main_hub = TRUE AND is_active = TRUE
+    ORDER BY id_sucursal ASC
+    LIMIT 1
+),
+hub_stock AS (
+    SELECT 
+        st.id_item,
+        st.id_sucursal AS hub_id_sucursal,
+        COALESCE(SUM(CASE WHEN st.tipo_almacen = 'DEPOSITO' THEN st.cantidad ELSE 0 END), 0)::integer AS hub_deposito_qty,
+        COALESCE(SUM(st.cantidad), 0)::integer AS hub_total_qty,
+        MAX(CASE WHEN st.tipo_almacen = 'DEPOSITO' THEN st.pasillo ELSE st.pasillo END) AS hub_pasillo,
+        MAX(CASE WHEN st.tipo_almacen = 'DEPOSITO' THEN st.estante ELSE st.estante END) AS hub_estante,
+        MAX(CASE WHEN st.tipo_almacen = 'DEPOSITO' THEN st.seccion ELSE st.seccion END) AS hub_seccion
+    FROM inventario_stock st
+    JOIN hub_info h ON h.id_sucursal = st.id_sucursal
+    GROUP BY st.id_item, st.id_sucursal
+)
 SELECT 
     s.id_sucursal,
     s.name AS sucursal_nombre,
@@ -285,17 +305,41 @@ SELECT
     i.item_name,
     i.sku,
     b.brand_name,
-    COALESCE(st_tienda.cantidad, 0) AS stock_tienda,
-    COALESCE(st_tienda.stock_minimo, 1) AS stock_minimo_tienda,
+    COALESCE(st_tienda.cantidad, 0)::integer AS stock_tienda,
+    COALESCE(st_tienda.stock_minimo, 1)::integer AS stock_minimo_tienda,
     st_tienda.pasillo AS tienda_pasillo,
     st_tienda.estante AS tienda_estante,
     st_tienda.seccion AS tienda_seccion,
-    COALESCE(st_deposito.cantidad, 0) AS stock_deposito_disponible,
-    st_deposito.pasillo AS deposito_pasillo,
-    st_deposito.estante AS deposito_estante,
-    st_deposito.seccion AS deposito_seccion
+    (CASE 
+        WHEN COALESCE(st_deposito.cantidad, 0) > 0 THEN COALESCE(st_deposito.cantidad, 0)
+        WHEN s.id_sucursal != COALESCE(h.id_sucursal, 0) THEN COALESCE(hs.hub_deposito_qty, hs.hub_total_qty, 0)
+        ELSE 0
+    END)::integer AS stock_deposito_disponible,
+    (CASE 
+        WHEN COALESCE(st_deposito.cantidad, 0) > 0 THEN st_deposito.pasillo
+        WHEN s.id_sucursal != COALESCE(h.id_sucursal, 0) THEN hs.hub_pasillo
+        ELSE 'S/P'
+    END) AS deposito_pasillo,
+    (CASE 
+        WHEN COALESCE(st_deposito.cantidad, 0) > 0 THEN st_deposito.estante
+        WHEN s.id_sucursal != COALESCE(h.id_sucursal, 0) THEN hs.hub_estante
+        ELSE 'S/E'
+    END) AS deposito_estante,
+    (CASE 
+        WHEN COALESCE(st_deposito.cantidad, 0) > 0 THEN st_deposito.seccion
+        WHEN s.id_sucursal != COALESCE(h.id_sucursal, 0) THEN hs.hub_seccion
+        ELSE 'S/S'
+    END) AS deposito_seccion,
+    (CASE
+        WHEN COALESCE(st_deposito.cantidad, 0) > 0 THEN 'DEPOSITO_LOCAL'
+        WHEN s.id_sucursal != COALESCE(h.id_sucursal, 0) AND COALESCE(hs.hub_total_qty, 0) > 0 THEN 'MAIN_HUB'
+        ELSE 'NINGUNO'
+    END) AS origen_reposicion,
+    h.name AS hub_nombre
 FROM item i
-JOIN sucursal s ON s.is_active = TRUE
+CROSS JOIN sucursal s
+LEFT JOIN hub_info h ON TRUE
+LEFT JOIN hub_stock hs ON hs.id_item = i.id_item
 LEFT JOIN brand b ON i.id_brand = b.id_brand
 LEFT JOIN inventario_stock st_tienda ON st_tienda.id_item = i.id_item 
     AND st_tienda.id_sucursal = s.id_sucursal 
@@ -304,5 +348,10 @@ LEFT JOIN inventario_stock st_deposito ON st_deposito.id_item = i.id_item
     AND st_deposito.id_sucursal = s.id_sucursal 
     AND st_deposito.tipo_almacen = 'DEPOSITO'
 WHERE 
-    COALESCE(st_tienda.cantidad, 0) <= COALESCE(st_tienda.stock_minimo, 1)
-    AND COALESCE(st_deposito.cantidad, 0) > 0;
+    s.is_active = TRUE
+    AND COALESCE(st_tienda.cantidad, 0) <= COALESCE(st_tienda.stock_minimo, 1)
+    AND (
+        COALESCE(st_deposito.cantidad, 0) > 0
+        OR
+        (s.id_sucursal != COALESCE(h.id_sucursal, 0) AND COALESCE(hs.hub_total_qty, 0) > 0)
+    );

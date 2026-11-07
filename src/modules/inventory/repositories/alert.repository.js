@@ -38,6 +38,8 @@ export const alertRepository = {
       itemName: r.item_name,
       sku: r.sku,
       brandName: r.brand_name,
+      origenReposicion: r.origen_reposicion || 'DEPOSITO_LOCAL',
+      hubNombre: r.hub_nombre || null,
       tienda: {
         stockActual: parseInt(r.stock_tienda, 10),
         stockMinimo: parseInt(r.stock_minimo_tienda, 10),
