@@ -10,6 +10,10 @@ if (missingVars.length > 0) {
   console.warn(`⚠️ [DATABASE WARNING]: Faltan variables de entorno requeridas: ${missingVars.join(', ')}`);
 }
 
+const isSslEnabled =
+  (process.env.DB_SSL || '').trim().toLowerCase() === 'true' ||
+  (process.env.DB_HOST || '').includes('supabase.com');
+
 const dbConfig = {
   host: (process.env.DB_HOST || 'localhost').trim(),
   user: (process.env.DB_USER || 'postgres').trim(),
@@ -19,12 +23,20 @@ const dbConfig = {
   max: parseInt((process.env.DB_POOL_MAX || '10').trim(), 10),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 20000,
+  keepAlive: true,
+  ...(isSslEnabled
+    ? {
+        ssl: {
+          rejectUnauthorized: false,
+        },
+      }
+    : {}),
 };
 
 const pool = new Pool(dbConfig);
 
 // Listeners del ciclo de vida del Pool
-pool.on('connect', (client) => {
+pool.on('connect', () => {
   // Conexión adquirida
 });
 
